@@ -1,0 +1,20 @@
+{
+  "name": "family-hub",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @family-hub/web",
+    "build": "npm run build -w @family-hub/web",
+    "preview": "npm run preview -w @family-hub/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
