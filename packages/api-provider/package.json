@@ -1,0 +1,17 @@
+{
+  "name": "@family-hub/api-provider",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@family-hub/core": "*",
+    "zod": "^4.6.5"
+  }
+}

@@ -1,0 +1,9 @@
+.venv
+data
+tests
+.pytest_cache
+**/__pycache__
+*.egg-info
+.env
+.env.*
+docker

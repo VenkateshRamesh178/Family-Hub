@@ -105,11 +105,13 @@ export function resolveRole(
   return BUILT_IN_ROLES.find((r) => r.id === roleId) ?? customRoles.find((r) => r.id === roleId);
 }
 
-export type Resource = 'family' | 'members' | 'roles' | 'lists' | 'docs' | 'chat';
+export type Resource = 'family' | 'members' | 'roles' | 'lists' | 'calendar' | 'docs' | 'chat';
 export type Action = 'read' | 'write';
 
 const RESOURCE_FOLDER: Partial<Record<Resource, FolderKey>> = {
   lists: 'lists',
+  // The calendar is family planning data, like the lists, so it shares their permission.
+  calendar: 'lists',
   docs: 'docs',
   chat: 'chat',
 };

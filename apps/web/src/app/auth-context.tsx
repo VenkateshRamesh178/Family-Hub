@@ -1,94 +1,83 @@
+import { ApiError, type SignUpInput } from '@family-hub/api-provider';
 import type { Identity } from '@family-hub/core';
-import { ReauthRequiredError } from '@family-hub/drive-provider';
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { auth, provider } from '../services';
+import { provider } from '../services';
 
 type AuthStatus = 'loading' | 'signedOut' | 'signedIn';
 
-export const REAUTH_EVENT = 'fh:reauth';
+export const SESSION_EXPIRED_EVENT = 'fh:session-expired';
 
-export function notifyIfReauth(e: unknown): void {
-  if (e instanceof ReauthRequiredError) window.dispatchEvent(new Event(REAUTH_EVENT));
+/** Query/mutation error hook (see main.tsx): a 401 anywhere means the session cookie is gone. */
+export function notifyIfSignedOut(e: unknown): void {
+  if (e instanceof ApiError && e.isUnauthorized) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
 }
 
 interface AuthState {
   status: AuthStatus;
   identity: Identity | null;
-  /** Silent token renewal failed; show a "tap to continue" prompt. */
-  needsReauth: boolean;
+  /** Why the user is signed out, if it wasn't their choice (server down, session expired). */
   error: unknown;
-  signIn(): Promise<void>;
-  signOut(): void;
-  reportError(e: unknown): void;
+  signIn(email: string, password: string): Promise<void>;
+  signUp(input: SignUpInput): Promise<void>;
+  signOut(): Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [identity, setIdentity] = useState<Identity | null>(null);
-  const [needsReauth, setNeedsReauth] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  const loadIdentity = useCallback(async () => {
-    const me = await provider.getIdentity();
-    auth.setLoginHint(me.email);
+  const signedIn = useCallback((me: Identity) => {
     setIdentity(me);
+    setError(null);
     setStatus('signedIn');
   }, []);
 
+  const signedOut = useCallback(
+    (why: unknown = null) => {
+      qc.clear();
+      setIdentity(null);
+      setError(why);
+      setStatus('signedOut');
+    },
+    [qc],
+  );
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        await auth.init();
-        if (cancelled) return;
-        if (auth.hasUsableToken()) await loadIdentity();
-        else setStatus('signedOut');
-      } catch (e) {
-        if (!cancelled) {
-          setError(e);
-          setStatus('signedOut');
-        }
-      }
-    })();
+    provider.getIdentity().then(
+      (me) => !cancelled && signedIn(me),
+      (e: unknown) => !cancelled && signedOut(e instanceof ApiError && e.isUnauthorized ? null : e),
+    );
     return () => {
       cancelled = true;
     };
-  }, [loadIdentity]);
+  }, [signedIn, signedOut]);
 
-  const signIn = useCallback(async () => {
-    setError(null);
-    try {
-      await auth.signIn();
-      setNeedsReauth(false);
-      if (!identity) await loadIdentity();
-    } catch (e) {
-      setError(e);
-    }
-  }, [identity, loadIdentity]);
-
-  const signOut = useCallback(() => {
-    auth.signOut();
-    setIdentity(null);
-    setStatus('signedOut');
-    window.location.assign('/');
-  }, []);
-
-  const reportError = useCallback((e: unknown) => {
-    if (e instanceof ReauthRequiredError) setNeedsReauth(true);
-  }, []);
-
-  // Query/mutation failures anywhere in the app are forwarded here (see main.tsx).
   useEffect(() => {
-    const onReauth = () => setNeedsReauth(true);
-    window.addEventListener(REAUTH_EVENT, onReauth);
-    return () => window.removeEventListener(REAUTH_EVENT, onReauth);
-  }, []);
+    const onExpired = () => signedOut(new Error('Your session has ended. Please sign in again.'));
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [signedOut]);
+
+  const signIn = useCallback(
+    async (email: string, password: string) => signedIn(await provider.signIn(email, password)),
+    [signedIn],
+  );
+  const signUp = useCallback(async (input: SignUpInput) => signedIn(await provider.signUp(input)), [signedIn]);
+  const signOut = useCallback(async () => {
+    await provider.signOut().catch(() => {});
+    signedOut();
+    window.history.replaceState(null, '', '/');
+  }, [signedOut]);
 
   const value = useMemo(
-    () => ({ status, identity, needsReauth, error, signIn, signOut, reportError }),
-    [status, identity, needsReauth, error, signIn, signOut, reportError],
+    () => ({ status, identity, error, signIn, signUp, signOut }),
+    [status, identity, error, signIn, signUp, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

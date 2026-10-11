@@ -1,6 +1,13 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
-import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  HTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from 'react';
 import { cn } from '../lib/utils';
 
 // Small shadcn-style primitives. Swap for generated shadcn/ui components as the UI grows.
@@ -59,6 +66,21 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
   return <select className={cn(fieldClass, 'pr-8', className)} {...props} />;
 }
 
+export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={cn(fieldClass, 'min-h-20 py-2', className)} {...props} />;
+}
+
+/** A large, thumb-friendly checkbox. */
+export function Checkbox({ className, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  return (
+    <input
+      type="checkbox"
+      className={cn('size-6 shrink-0 cursor-pointer rounded accent-brand-700 disabled:cursor-default', className)}
+      {...props}
+    />
+  );
+}
+
 export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
   return (
     <label htmlFor={htmlFor} className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -89,6 +111,18 @@ export function ErrorNote({ error }: { error: unknown }) {
   return (
     <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
       {error instanceof Error ? error.message : String(error)}
+    </p>
+  );
+}
+
+export function EmptyState({ children }: { children: ReactNode }) {
+  return <p className="py-6 text-center text-sm text-slate-500">{children}</p>;
+}
+
+export function ViewOnlyNote() {
+  return (
+    <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+      Your role can view this list but not change it.
     </p>
   );
 }

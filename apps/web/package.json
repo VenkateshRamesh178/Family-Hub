@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@family-hub/core": "*",
-    "@family-hub/drive-provider": "*",
+    "@family-hub/api-provider": "*",
     "@tanstack/react-query": "^5.104.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

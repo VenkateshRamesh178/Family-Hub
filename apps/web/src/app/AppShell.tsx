@@ -1,19 +1,23 @@
-import { FlaskConical, Home, LogOut, ShieldCheck } from 'lucide-react';
+import { CalendarDays, CheckSquare, FileText, Home, LogOut, Package, ShieldCheck, ShoppingCart } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router';
+import { Link, NavLink } from 'react-router';
 import { Button } from '../components/ui';
 import { cn } from '../lib/utils';
 import { useAuth } from './auth-context';
 import { useSession } from './family-context';
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { identity, signOut, needsReauth, signIn } = useAuth();
+  const { identity, signOut } = useAuth();
   const session = useSession();
 
+  // Six short labels still fit a 360px-wide phone; Admin lives in the header.
   const nav = [
     { to: '/', label: 'Home', icon: Home, end: true },
-    ...(session.isAdmin ? [{ to: '/admin', label: 'Admin', icon: ShieldCheck, end: false }] : []),
-    { to: '/spike', label: 'Diagnostics', icon: FlaskConical, end: false },
+    { to: '/calendar', label: 'Calendar', icon: CalendarDays, end: false },
+    { to: '/shopping', label: 'Shopping', icon: ShoppingCart, end: false },
+    { to: '/todos', label: 'To-dos', icon: CheckSquare, end: false },
+    { to: '/purchases', label: 'Purchases', icon: Package, end: false },
+    { to: '/docs', label: 'Docs', icon: FileText, end: false },
   ];
 
   return (
@@ -23,26 +27,28 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="truncate font-semibold">{session.family.name}</p>
           <p className="truncate text-xs text-slate-500">{identity?.email}</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out">
-          <LogOut className="size-4" aria-hidden />
-        </Button>
-      </header>
-
-      {needsReauth && (
-        <div className="flex items-center justify-between gap-3 bg-amber-100 px-4 py-2 text-sm text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
-          <span>Your Google session expired.</span>
-          <Button size="sm" onClick={signIn}>
-            Continue
+        <div className="flex shrink-0 items-center gap-1">
+          {session.isAdmin && (
+            <Link
+              to="/admin"
+              aria-label="Admin: members and roles"
+              className="inline-flex min-h-9 items-center rounded-lg px-3 text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <ShieldCheck className="size-4" aria-hidden />
+            </Link>
+          )}
+          <Button variant="ghost" size="sm" onClick={signOut} aria-label="Sign out">
+            <LogOut className="size-4" aria-hidden />
           </Button>
         </div>
-      )}
+      </header>
 
       <main className="flex-1 px-4 py-4 pb-24">{children}</main>
 
       <nav className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] dark:border-slate-800 dark:bg-slate-950">
         <ul className="mx-auto flex max-w-2xl">
           {nav.map(({ to, label, icon: Icon, end }) => (
-            <li key={to} className="flex-1">
+            <li key={to} className="min-w-0 flex-1">
               <NavLink
                 to={to}
                 end={end}
@@ -54,7 +60,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 }
               >
                 <Icon className="size-5" aria-hidden />
-                {label}
+                <span className="max-w-full truncate px-1">{label}</span>
               </NavLink>
             </li>
           ))}

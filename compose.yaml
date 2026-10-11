@@ -1,0 +1,55 @@
+# `docker compose up` runs the whole app on http://localhost:5173.
+# For development with hot reload, start only the database (`npm run db:up`) and run
+# `npm run api` and `npm run dev` on the host instead; they use the same ports.
+# To keep document files in S3 instead of a Docker volume, see compose.s3.yaml.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: familyhub
+      POSTGRES_PASSWORD: familyhub
+      POSTGRES_DB: familyhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Runs once, on first start: creates the familyhub_test database used by pytest.
+      - ./services/api/docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U familyhub"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./services/api
+    # Optional settings (see services/api/app/config.py); the database URL below always wins.
+    env_file:
+      - path: ./services/api/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://familyhub:familyhub@db:5432/familyhub
+    volumes:
+      - docs-data:/app/data/docs
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    # 5173, like the dev server: the S3 bucket's CORS rules allow uploads from this origin.
+    # WEB_PORT=8080 docker compose up  -- to run it next to `npm run dev`.
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  # Uploaded documents, when DOCS_STORAGE is local (the default).
+  docs-data:

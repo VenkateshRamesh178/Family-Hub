@@ -25,16 +25,21 @@ export default defineConfig({
           { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      // Only the app shell is precached. Google API calls are cross-origin and
-      // never cached by the service worker; offline data comes from IndexedDB (Phase 2).
+      // Only the app shell is precached; API responses are never cached by the service worker.
       workbox: {
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],
+  // The API runs on :8000 (npm run api). Proxying keeps it same-origin, so the
+  // HttpOnly session cookie just works and no CORS is needed.
   server: {
-    // Must match an "Authorized JavaScript origin" on the OAuth client.
     port: 5173,
     strictPort: true,
+    proxy: { '/api': 'http://localhost:8000' },
+  },
+  preview: {
+    proxy: { '/api': 'http://localhost:8000' },
   },
 });

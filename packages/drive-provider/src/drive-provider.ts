@@ -16,16 +16,28 @@ import {
   roleDefinitionSchema,
   rolesFileSchema,
   type DataProvider,
+  type DocumentsApi,
   type FamilyConfig,
+  type CalendarEvent,
+  type CalendarEventInput,
+  type CalendarOccurrence,
+  type Collection,
   type FamilySession,
   type FolderKey,
   type Identity,
   type InviteInput,
   type JoinHandle,
   type Member,
+  type PendingInvite,
   type MemberDirectory,
   type RoleDefinition,
+  type PurchasedItem,
+  type PurchasedItemInput,
   type RolesFile,
+  type ShoppingItem,
+  type ShoppingItemInput,
+  type Todo,
+  type TodoInput,
 } from '@family-hub/core';
 import { DriveApiError, DriveClient, appPropQuery } from './drive-client';
 import {
@@ -60,6 +72,21 @@ export class NotAFamilyFolderError extends Error {
   }
 }
 
+/** The Drive edition's session also carries the family's folder and file ids. */
+export type DriveSession = FamilySession & { family: FamilyConfig };
+
+/** Lists come to the free edition after the web (API) edition is built. */
+/** Every method rejects: documents need the Drive storage layer, which isn't built yet. */
+function docsNotYetBuilt(): DocumentsApi {
+  const fail = () => Promise.reject(new Error("Documents aren't available in the free edition yet."));
+  return new Proxy({} as DocumentsApi, { get: () => fail });
+}
+
+function notYetBuilt<T, In>(what: string): Collection<T, In> {
+  const fail = () => Promise.reject(new Error(`${what} isn't available in the free edition yet.`));
+  return { list: fail, create: fail, update: fail, remove: fail };
+}
+
 /** Free-edition DataProvider: all shared state lives in the admin's Google Drive. */
 export class DriveProvider implements DataProvider {
   readonly edition = 'free' as const;
@@ -67,8 +94,21 @@ export class DriveProvider implements DataProvider {
   private readonly appUrl: string;
   private readonly storage: Storage | undefined;
   private identity: Identity | null = null;
-  private session: FamilySession | null = null;
+  private session: DriveSession | null = null;
   private customRoles: RoleDefinition[] = [];
+
+  readonly shopping = {
+    ...notYetBuilt<ShoppingItem, ShoppingItemInput>('The shopping list'),
+    clearChecked: () => Promise.reject(new Error("The shopping list isn't available in the free edition yet.")),
+  };
+  readonly todos = notYetBuilt<Todo, TodoInput>('To-dos');
+  readonly purchases = notYetBuilt<PurchasedItem, PurchasedItemInput>('Items purchased');
+  readonly events = notYetBuilt<CalendarEvent, CalendarEventInput>('The calendar');
+  readonly docs = docsNotYetBuilt();
+
+  calendar(_from: string, _to: string): Promise<CalendarOccurrence[]> {
+    return Promise.reject(new Error("The calendar isn't available in the free edition yet."));
+  }
 
   constructor(opts: DriveProviderOptions) {
     this.client = opts.client;
@@ -76,7 +116,7 @@ export class DriveProvider implements DataProvider {
     this.storage = opts.storage;
   }
 
-  get currentSession(): FamilySession | null {
+  get currentSession(): DriveSession | null {
     return this.session;
   }
 
@@ -94,7 +134,7 @@ export class DriveProvider implements DataProvider {
 
   // --- Family lifecycle ----------------------------------------------------
 
-  async findFamily(): Promise<FamilySession | null> {
+  async findFamily(): Promise<DriveSession | null> {
     const me = await this.getIdentity();
     const cached = this.storageGet(this.rootKey(me.email));
     if (cached) {
@@ -125,7 +165,7 @@ export class DriveProvider implements DataProvider {
     return null;
   }
 
-  async createFamily(name: string): Promise<FamilySession> {
+  async createFamily(name: string): Promise<DriveSession> {
     const me = await this.getIdentity();
     const familyId = crypto.randomUUID();
     const tag = (kind: string) => ({ [PROP_KIND]: kind, [PROP_FAMILY]: familyId });
@@ -166,9 +206,14 @@ export class DriveProvider implements DataProvider {
     return this.openFamily(root.id);
   }
 
-  async joinFamily(handle: JoinHandle): Promise<FamilySession> {
+  async joinFamily(handle: JoinHandle): Promise<DriveSession> {
     if (handle.kind !== 'drive-folder') throw new Error('The free edition joins via a shared Drive folder.');
     return this.openFamily(handle.folderId);
+  }
+
+  /** Drive emails the invite itself; members join by picking the shared folder. */
+  async listPendingInvites(): Promise<PendingInvite[]> {
+    return [];
   }
 
   async leaveOnThisDevice(): Promise<void> {
@@ -278,7 +323,7 @@ export class DriveProvider implements DataProvider {
 
   // --- internals -----------------------------------------------------------
 
-  private async openFamily(rootId: string): Promise<FamilySession> {
+  private async openFamily(rootId: string): Promise<DriveSession> {
     const me = await this.getIdentity();
     const root = await this.client.getFile(rootId);
     const familyFileId = root.appProperties?.[PROP_FAMILY_FILE];
@@ -351,7 +396,7 @@ export class DriveProvider implements DataProvider {
     return ops;
   }
 
-  private inviteMessage(s: FamilySession): string {
+  private inviteMessage(s: DriveSession): string {
     return (
       `${s.me.displayName} invited you to the "${s.family.name}" Family Hub.\n\n` +
       `Open ${this.appUrl} on your phone, sign in with this Google account, ` +
@@ -381,12 +426,12 @@ export class DriveProvider implements DataProvider {
     return rolesFileSchema.parse(await this.client.readJson(s.family.metaFiles.roles));
   }
 
-  private requireSession(): FamilySession {
+  private requireSession(): DriveSession {
     if (!this.session) throw new Error('No family is open.');
     return this.session;
   }
 
-  private requireAdmin(): FamilySession {
+  private requireAdmin(): DriveSession {
     const s = this.requireSession();
     if (!s.isAdmin) throw new Error('Only the family admin can do this.');
     return s;

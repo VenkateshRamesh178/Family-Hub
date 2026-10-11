@@ -1,0 +1,14 @@
+# Keeps document files in the S3 bucket instead of the docs-data volume:
+#   docker compose -f compose.yaml -f compose.s3.yaml up
+# Needs a current `aws login` on the host (the family-hub-dev profile chains from it). Your
+# ~/.aws folder is mounted writable because the API refreshes the login session in it.
+services:
+  api:
+    environment:
+      DOCS_STORAGE: s3
+      # Set in the git-ignored .env file next to this one (Compose reads it automatically).
+      DOCS_S3_BUCKET: ${DOCS_S3_BUCKET:?Put DOCS_S3_BUCKET=<your bucket> in .env at the repo root}
+      DOCS_S3_REGION: ap-southeast-2
+      DOCS_S3_PROFILE: family-hub-dev
+    volumes:
+      - ~/.aws:/home/app/.aws

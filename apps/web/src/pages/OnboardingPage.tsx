@@ -1,39 +1,77 @@
-import { pickSharedFolder } from '@family-hub/drive-provider';
-import { useMutation } from '@tanstack/react-query';
-import { FolderOpen, Users } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Mail, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../app/auth-context';
 import { useFamilyState } from '../app/family-context';
-import { Button, Card, CardTitle, ErrorNote, Input, Label } from '../components/ui';
-import { canPickFolders, config } from '../config';
-import { auth, provider } from '../services';
+import { Button, Card, CardTitle, ErrorNote, Input, Label, Spinner } from '../components/ui';
+import { provider } from '../services';
 
 export function OnboardingPage() {
   const { identity, signOut } = useAuth();
   const { setSession } = useFamilyState();
   const [name, setName] = useState('');
 
-  const create = useMutation({
-    mutationFn: () => provider.createFamily(name),
-    onSuccess: setSession,
-  });
-
+  const invites = useQuery({ queryKey: ['invites', identity?.email], queryFn: () => provider.listPendingInvites() });
+  const create = useMutation({ mutationFn: () => provider.createFamily(name), onSuccess: setSession });
   const join = useMutation({
-    mutationFn: async () => {
-      const accessToken = await auth.getAccessToken();
-      const folder = await pickSharedFolder({ accessToken, apiKey: config.apiKey, appId: config.appId });
-      if (!folder) return null;
-      return provider.joinFamily({ kind: 'drive-folder', folderId: folder.id });
-    },
-    onSuccess: (s) => s && setSession(s),
+    mutationFn: (code: string) => provider.joinFamily({ kind: 'invite-code', code }),
+    onSuccess: setSession,
   });
 
   return (
     <main className="mx-auto max-w-lg space-y-4 p-4">
       <header className="pt-4">
         <h1 className="text-2xl font-bold">Welcome{identity ? `, ${identity.displayName.split(' ')[0]}` : ''}</h1>
-        <p className="text-slate-600 dark:text-slate-400">Start a new family, or join one you've been invited to.</p>
+        <p className="text-slate-600 dark:text-slate-400">Join your family, or start a new one.</p>
       </header>
+
+      {invites.isPending ? (
+        <Spinner label="Checking for invites…" />
+      ) : invites.data && invites.data.length > 0 ? (
+        <Card className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Mail className="size-5 text-brand-700" aria-hidden />
+            <CardTitle>You've been invited</CardTitle>
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {invites.data.map((inv) => (
+              <li key={inv.code} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{inv.familyName}</p>
+                  <p className="truncate text-xs text-slate-500">
+                    {inv.roleName} · invited by {inv.invitedBy}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  loading={join.isPending && join.variables === inv.code}
+                  disabled={join.isPending}
+                  onClick={() => join.mutate(inv.code)}
+                >
+                  Join
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <ErrorNote error={join.error} />
+        </Card>
+      ) : (
+        <Card className="space-y-1">
+          <CardTitle>Joining your family?</CardTitle>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Ask your family's admin to invite <strong>{identity?.email}</strong>, then{' '}
+            <button
+              type="button"
+              className="font-medium text-brand-700 underline dark:text-brand-500"
+              onClick={() => invites.refetch()}
+            >
+              check again
+            </button>
+            .
+          </p>
+          <ErrorNote error={invites.error} />
+        </Card>
+      )}
 
       <Card className="space-y-3">
         <div className="flex items-center gap-2">
@@ -41,8 +79,7 @@ export function OnboardingPage() {
           <CardTitle>Create a family</CardTitle>
         </div>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          Creates a <strong>FamilyHub</strong> folder in your Google Drive. You'll be the admin, and the family's
-          shared data will use your Drive storage.
+          You'll be the admin: you invite members and decide what each of them can change.
         </p>
         <form
           className="space-y-3"
@@ -69,28 +106,8 @@ export function OnboardingPage() {
         </form>
       </Card>
 
-      <Card className="space-y-3">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="size-5 text-brand-700" aria-hidden />
-          <CardTitle>Join a family</CardTitle>
-        </div>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          Your admin shared a <strong>FamilyHub</strong> folder with {identity?.email}. Select it to join.
-        </p>
-        {canPickFolders ? (
-          <Button variant="secondary" loading={join.isPending} onClick={() => join.mutate()}>
-            Choose shared folder
-          </Button>
-        ) : (
-          <p className="text-sm text-amber-700 dark:text-amber-300">
-            Joining needs <code>VITE_GOOGLE_API_KEY</code> and <code>VITE_GOOGLE_APP_ID</code> to be set.
-          </p>
-        )}
-        <ErrorNote error={join.error} />
-      </Card>
-
       <Button variant="ghost" onClick={signOut}>
-        Use a different Google account
+        Sign out
       </Button>
     </main>
   );

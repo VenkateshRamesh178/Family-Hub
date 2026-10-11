@@ -1,9 +1,9 @@
 import {
-  FOLDER_KEYS,
-  FOLDER_NAMES,
+  ADMIN_ROLE_ID,
   READER_ROLE,
   slugifyRoleId,
   type FolderAccess,
+  type FolderKey,
   type Member,
   type RoleDefinition,
 } from '@family-hub/core';
@@ -12,11 +12,19 @@ import { Trash2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { useSession } from '../app/family-context';
 import { Badge, Button, Card, CardTitle, ErrorNote, Input, Label, Select, Spinner } from '../components/ui';
+import { keys, useMembers } from '../lib/queries';
 import { cn } from '../lib/utils';
 import { provider } from '../services';
 
-const membersKey = ['members'] as const;
-const rolesKey = ['roles'] as const;
+const membersKey = keys.members;
+const rolesKey = keys.roles;
+
+/** The areas a role can make editable. Members and roles are always admin-only. */
+const AREAS: { key: FolderKey; label: string }[] = [
+  { key: 'lists', label: 'Lists & calendar' },
+  { key: 'docs', label: 'Documents' },
+  { key: 'chat', label: 'Chat' },
+];
 
 export function AdminPage() {
   const [tab, setTab] = useState<'members' | 'roles'>('members');
@@ -48,12 +56,13 @@ export function AdminPage() {
 function MembersTab() {
   const session = useSession();
   const qc = useQueryClient();
-  const members = useQuery({ queryKey: membersKey, queryFn: () => provider.listMembers() });
+  const members = useMembers();
   const roles = useQuery({ queryKey: rolesKey, queryFn: () => provider.listRoles() });
   const invalidate = () => qc.invalidateQueries({ queryKey: membersKey });
 
   if (members.isPending || roles.isPending) return <Spinner />;
   if (members.isError || roles.isError) return <ErrorNote error={members.error ?? roles.error} />;
+  const others = members.data.filter((m) => m.roleId !== ADMIN_ROLE_ID);
 
   return (
     <div className="space-y-4">
@@ -68,11 +77,11 @@ function MembersTab() {
             </div>
             <Badge tone="brand">Admin (owner)</Badge>
           </li>
-          {members.data.map((m) => (
+          {others.map((m) => (
             <MemberRow key={m.email} member={m} roles={roles.data} onDone={invalidate} />
           ))}
         </ul>
-        {members.data.length === 0 && <p className="py-2 text-sm text-slate-500">No one else yet — invite someone above.</p>}
+        {others.length === 0 && <p className="py-2 text-sm text-slate-500">No one else yet — invite someone above.</p>}
       </Card>
     </div>
   );
@@ -100,7 +109,7 @@ function InviteForm({ roles, onDone }: { roles: RoleDefinition[]; onDone: () => 
       >
         <CardTitle>Invite a family member</CardTitle>
         <div>
-          <Label htmlFor="invite-email">Their Google account email</Label>
+          <Label htmlFor="invite-email">Their email</Label>
           <Input
             id="invite-email"
             type="email"
@@ -127,7 +136,7 @@ function InviteForm({ roles, onDone }: { roles: RoleDefinition[]; onDone: () => 
         </Button>
         {invite.isSuccess && (
           <p className="text-sm text-green-700 dark:text-green-400">
-            Invited. Google will email them a link to the shared folder.
+            Invited. Ask them to sign up with that email; the invite will be waiting for them.
           </p>
         )}
         <ErrorNote error={invite.error} />
@@ -172,7 +181,7 @@ function MemberRow({ member, roles, onDone }: { member: Member; roles: RoleDefin
           loading={remove.isPending}
           aria-label={`Remove ${member.email}`}
           onClick={() => {
-            if (confirm(`Remove ${member.email}? They will lose access to the family folder.`)) remove.mutate();
+            if (confirm(`Remove ${member.email}? They will lose access to the family.`)) remove.mutate();
           }}
         >
           <Trash2 className="size-4" aria-hidden />
@@ -195,8 +204,8 @@ function RolesTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-600 dark:text-slate-400">
-        Every member can view everything in the family folder. A role decides which areas they can also change.
-        Vault access is granted separately (coming in Phase 4).
+        Every member can view everything. A role decides which areas they can also change. Only the admin manages
+        members and roles. Vault access will be granted separately.
       </p>
       {roles.data.map((r) => (
         <Card key={r.id} className="space-y-2">
@@ -233,16 +242,16 @@ function FolderGrid({
   onChange,
 }: {
   folders: RoleDefinition['folders'];
-  onChange?: (k: (typeof FOLDER_KEYS)[number], v: FolderAccess) => void;
+  onChange?: (k: FolderKey, v: FolderAccess) => void;
 }) {
   return (
     <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-      {FOLDER_KEYS.map((k) => (
+      {AREAS.map(({ key: k, label }) => (
         <li key={k} className="flex items-center justify-between gap-2">
-          <span className="text-slate-600 dark:text-slate-400">{FOLDER_NAMES[k]}</span>
-          {onChange && k !== 'meta' ? (
+          <span className="text-slate-600 dark:text-slate-400">{label}</span>
+          {onChange ? (
             <Select
-              aria-label={`Access to ${FOLDER_NAMES[k]}`}
+              aria-label={`Access to ${label}`}
               className="min-h-9 w-auto py-0 text-sm"
               value={folders[k]}
               onChange={(e) => onChange(k, e.target.value as FolderAccess)}
@@ -292,7 +301,6 @@ function RoleEditor({ initial, onClose }: { initial: RoleDefinition; onClose: ()
         />
       </div>
       <FolderGrid folders={role.folders} onChange={(k, v) => setRole({ ...role, folders: { ...role.folders, [k]: v } })} />
-      <p className="text-xs text-slate-500">_meta is always view-only: only the admin manages members and roles.</p>
       <div className="flex flex-wrap gap-2">
         <Button loading={save.isPending} disabled={!role.name.trim()} onClick={() => save.mutate()}>
           Save

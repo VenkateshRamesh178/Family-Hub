@@ -1,6 +1,7 @@
 import type { FamilySession } from '@family-hub/core';
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, type ReactNode } from 'react';
+import { keys } from '../lib/queries';
 import { provider } from '../services';
 import { useAuth } from './auth-context';
 
@@ -12,7 +13,7 @@ interface FamilyState {
 
 const FamilyContext = createContext<FamilyState | null>(null);
 
-export const familyKey = (email: string | undefined) => ['family', email] as const;
+export const familyKey = (email: string | undefined) => [...keys.family, email] as const;
 
 export function FamilyProvider({ children }: { children: ReactNode }) {
   const { identity } = useAuth();

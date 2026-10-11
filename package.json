@@ -11,7 +11,13 @@
     "build": "npm run build -w @family-hub/web",
     "preview": "npm run preview -w @family-hub/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "db:up": "docker compose up -d --wait db",
+    "db:down": "docker compose down",
+    "api:setup": "node scripts/py.mjs --setup",
+    "api:migrate": "node scripts/py.mjs alembic upgrade head",
+    "api": "node scripts/py.mjs uvicorn app.main:app --reload --port 8000",
+    "api:test": "node scripts/py.mjs pytest"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

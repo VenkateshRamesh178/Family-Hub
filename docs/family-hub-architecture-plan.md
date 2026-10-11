@@ -12,7 +12,9 @@ A centralized family dashboard web app, built mobile-first (Android PWA first, i
 
 Both editions share the same React frontend and the same feature set, switched behind a `DataProvider` interface (`DriveProvider` vs `ApiProvider`).
 
-We are building the **free edition first**, then the paid edition.
+~~We are building the **free edition first**, then the paid edition.~~
+
+> **Update (2026-10-03):** order reversed. The full feature set is being built first as a regular web app (FastAPI + Postgres in Docker + local file storage, i.e. the paid-edition architecture run locally), so there is a working product to show. The Drive free edition and the AWS deployment follow. See the README for the current milestones.
 
 ---
 
